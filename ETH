@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract ETH is ERC20, Ownable {
+    
+    uint256 public maxWallet;
+    uint256 public maxTx;
+    uint8 public taxPercent = 5;
+    address public marketingWallet;
+    bool public tradingOpen = false;
+
+    constructor(uint256 initialSupply, address _marketingWallet) 
+        ERC20("Little Pepe", "LILPEPE") 
+        Ownable(msg.sender)
+    {
+        marketingWallet = _marketingWallet;
+        
+        maxWallet = initialSupply * 2 / 100;   // 2% = 18 миллиардов
+        maxTx    = initialSupply * 1 / 100;   // 1% = 9 миллиардов
+        
+        _mint(msg.sender, initialSupply * 10 ** decimals());
+    }
+
+    function _update(address from, address to, uint256 amount) internal override {
+        if (!tradingOpen && from != owner() && to != owner()) {
+            revert("Trading not started yet");
+        }
+
+        if (from != owner() && to != owner()) {
+            require(amount <= maxTx, "Max Tx exceeded");
+            if (to != address(this) && to != marketingWallet) {
+                require(balanceOf(to) + amount <= maxWallet, "Max Wallet exceeded");
+            }
+        }
+
+        uint256 taxAmount = (amount * taxPercent) / 100;
+        uint256 sendAmount = amount - taxAmount;
+
+        super._update(from, marketingWallet, taxAmount);
+        super._update(from, to, sendAmount);
+    }
+
+    function openTrading() external onlyOwner {
+        tradingOpen = true;
+    }
+
+    function setTax(uint8 newTax) external onlyOwner {
+        require(newTax <= 15, "Tax too high");
+        taxPercent = newTax;
+    }
+}
